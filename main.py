@@ -3,48 +3,47 @@ import yt_dlp
 
 app = Flask(__name__)
 
+# Endpoint di test per verificare se il server è online
+@app.route('/', methods=['GET'])
+def home():
+    return "Server Online", 200
+
 @app.route('/search', methods=['POST'])
 def search():
-    print("=== RICHIESTA /search RICEVUTA ===")
+    try:
+        data = request.get_json()
+        print(f"✅ Ricevuto JSON: {data}")
 
-    if not request.is_json:
-        return jsonify({"error": "Content-Type must be application/json"}), 415
+        if not data or 'query' not in data:
+            print("❌ Richiesta errata, manca 'query'.")
+            return jsonify({"error": "Invalid request"}), 400
 
-    data = request.get_json()
-    if "query" not in data:
-        return jsonify({"error": "Missing 'query' field"}), 400
+        query = data['query']
+        print(f"🔍 Query ricevuta: {query}")
 
-    query = data['query']
-    ydl_opts = {
-        'quiet': True,
-        'skip_download': True,
-        'extract_flat': True,
-        'format': 'bestaudio/best',
-        'default_search': 'ytsearch5',
-    }
-
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        results = []
         try:
-            results = ydl.extract_info(query, download=False)
+            with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+                search_results = ydl.extract_info(f"ytsearch10:{query}", download=False)['entries']
+                for result in search_results:
+                    results.append({
+                        "title": result.get("title"),
+                        "url": result.get("webpage_url")
+                    })
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            print(f"❌ Errore durante la ricerca: {e}")
+            return jsonify({"error": "Errore durante la ricerca"}), 500
 
-    if 'entries' not in results:
-        return jsonify({"error": "No results found"}), 404
+        if not results:
+            print("❌ Nessun risultato trovato.")
+            return jsonify({"error": "No results found"}), 404
 
-    entries = results['entries']
-    response = []
-    for entry in entries:
-        if entry is None:
-            continue
-        video_info = {
-            "title": entry.get("title", "No title"),
-            "url": entry.get("webpage_url", "No URL")
-        }
-        response.append(video_info)
+        print(f"✅ Risultati trovati: {results}")
+        return jsonify(results), 200
 
-    return jsonify(response), 200
-
+    except Exception as e:
+        print(f"🔥 Errore Generale: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
